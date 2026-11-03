@@ -1,6 +1,6 @@
 # Module 4: Advanced Fact Table Patterns (Returns & Late Arrivals)
 
-In Module 2, we established a golden rule of data architecture: **Fact tables are append-only (immutable event logs).** We do not run mutating `UPDATE` statements on billions of historical rows when real-world changes happen.
+In Module 2, I established a golden rule of data architecture: **Fact tables are append-only (immutable event logs).** I do not run mutating `UPDATE` statements on billions of historical rows when real-world changes happen.
 
 So, how do professional data engineers handle real-world messy scenarios like product returns, order cancellations, and delayed data packets without breaking historical integrity? 
 
@@ -10,7 +10,7 @@ Let's explore two essential advanced patterns.
 
 Imagine a customer buys 2 units of a product for \$40.00 on June 1st. Two days later, they return both items. 
 
-If we were to update or delete the original row in the fact table, we would destroy our audit trail and falsify total daily sales volume for June 1st. Instead, we insert a **compensating row** (a reversal).
+If I was to update or delete the original row in the fact table, I would destroy our audit trail and falsify total daily sales volume for June 1st. Instead, I insert a **compensating row** (a reversal).
 
 ### Intuition: The Ledger Book
 Think of a traditional accountant's ledger. Accountants never erase a mistaken entry with white-out. If a mistake or return happens, they write a second balancing entry with negative numbers so the net total adjusts correctly while preserving the complete audit history.
@@ -49,6 +49,3 @@ If a sale happened on June 1st, but the data packet doesn't arrive at your data 
 3. **Compensate, Don't Mutate:** Use negative values in new rows to handle returns and refunds.
 4. **Preserve Original Time:** Always anchor fact tables to the business event date (`sale_date`), not the pipeline processing date.
 
-## Up Next
-
-You have now built a complete conceptual framework covering grain, primary keys, star schemas, surrogate keys, SCD types, CDC, and advanced fact patterns! What aspect of data architecture or SQL implementation would you like to explore next?
