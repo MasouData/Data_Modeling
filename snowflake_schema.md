@@ -1,6 +1,6 @@
 # Module 5: The Snowflake Schema (Normalization and Trade-Offs)
 
-In Module 2, we introduced the **Star Schema**, where dimension tables are flat, denormalized tables surrounding a central fact table. But as data models grow, you will often hear about its cousin: the **Snowflake Schema**.
+In Module 2, I introduced the **Star Schema**, where dimension tables are flat, denormalized tables surrounding a central fact table. But as data models grow, you will often hear about its cousin: the **Snowflake Schema**.
 
 Let's dive into what a snowflake schema is, why it exists, and when you should (or shouldn't) use it.
 
@@ -28,7 +28,7 @@ In a standard star schema, `Dim_Product` is flat and wide:
 * **Trade-off:** Simple queries, fast performance, but if "Sporting Goods" changes its name to "Athletics & Sports", you have to update thousands of rows (or handle it via SCD).
 
 ### Snowflake Schema Approach (Normalized)
-In a snowflake schema, we split `Dim_Product` into normalized child tables:
+In a snowflake schema, I split `Dim_Product` into normalized child tables:
 
 1. **`Dim_Product`** (Stores individual products and foreign keys to subcategories)
 2. **`Dim_Subcategory`** (Stores subcategories and foreign keys to categories)
@@ -58,7 +58,3 @@ In a snowflake schema, we split `Dim_Product` into normalized child tables:
 1. **Snowflake = Normalized Dimensions:** Branching out flat dimensions into sub-tables.
 2. **Space vs. Speed:** Saves storage space and reduces redundancy, but increases query complexity (`JOIN` overhead).
 3. **The Industry Standard:** Stick to Star Schemas for analytical data warehouses unless a specific architectural requirement dictates otherwise.
-
-## Up Next
-
-You have now completed a comprehensive, end-to-end documentation series covering Grain, Primary Keys, Star Schemas, SCDs, CDC, Advanced Fact Patterns, and Snowflake Schemas! What repository structure or additional data architecture topics would you like to build out next?
