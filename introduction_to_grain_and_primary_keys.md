@@ -19,7 +19,7 @@ The **grain** defines what a single row in a table represents.
 
 ---
 
-## 2. Visual Walkthrough: The Order Management System Example
+## 2. Normalization: The Order Management System Example
 
 Let’s trace a single online store order through each normalization layer using data tables to see how redundancy is eliminated.
 
