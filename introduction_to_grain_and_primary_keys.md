@@ -1,25 +1,58 @@
 # Introduction to Grain, Primary Keys, and Database Normalization
 
-Data modeling starts with defining the **grain** of your data and structuring your tables cleanly using keys and normalization. This document covers grain, key types, and the complete spectrum of normalization forms from 1NF to 4NF using a visual, step-by-step example.
+Data modeling starts long before normalization. It starts with understanding **grain** (the level of detail in your data) and mastering **keys** (how rows and tables relate to one another). 
 
 ---
 
-## 1. Grain and Keys: The Building Blocks
+## 1. What is Grain? (The Level of Detail)
 
-### What is Grain?
-The **grain** defines what a single row in a table represents. 
-* *Example:* In an `OrderItems` table, the grain is **one row per product per order**.
+The **grain** defines precisely what a single row in a table represents. Getting the grain wrong is the #1 cause of broken data models and bloated queries.
 
-### Understanding Key Types
-* **Primary Key (PK):** A column (or set of columns) chosen to uniquely identify every row.
-* **Candidate Key:** Any column (or combination) that *could* uniquely identify a row.
-* **Super-Key:** **Any** combination of columns that uniquely identifies a row (can contain redundant columns). Every primary key is a super-key, but not vice versa.
-* **Surrogate Key:** An artificial, system-generated ID used as a primary key instead of a messy business key.
-* **Foreign Key (FK):** A column referencing the primary key of another table, acting as the "glue" that reconnects split tables.
+### How to Think About Grain
+Always ask yourself: *"If I look at one single row in this table, what am I looking at?"*
+
+* **Coarse Grain (High-level summary):** One row per store. (e.g., Total sales for Store A today).
+* **Medium Grain (Operational level):** One row per customer order. (e.g., Order #101 placed by Alice).
+* **Fine Grain (Granular detail):** One row per product inside an order. (e.g., Item 1 in Order #101, Item 2 in Order #101).
+
+> **Rule of Thumb:** Always design your tables at the **finest practical grain** (line-item level). You can always aggregate fine data up into summaries, but you can never accurately split a summary back down into fine data.
 
 ---
 
-## 2. Normalization: The Order Management System Example
+## 2. The Key Spectrum (With Examples)
+
+To build relational models, you must understand the hierarchy of keys. Let's use a sample `Employees` table containing columns: `EmployeeID`, `Email`, `SSN`, `FirstName`, `LastName`.
+
+### A. Natural Key vs. Surrogate Key
+* **Natural Key:** A real-world, business-owned unique identifier. 
+  * *Example:* `SSN` or an `EmailAddress`. 
+  * *The Trap:* Real-world data can change (e.g., a user updates their email), which breaks database relationships.
+* **Surrogate Key:** An artificial, system-generated ID with no business meaning.
+  * *Example:* An auto-incrementing integer (`1, 2, 3...`) or a UUID (`e.g., a0b1c2d3-...`).
+  * *Why we use it:* They never change, making them safe, permanent anchors for foreign keys.
+
+### B. Candidate Key
+* **Definition:** Any column (or minimal combination of columns) that *could* uniquely identify a row. 
+* *In our example:* Both `EmployeeID`, `Email`, and `SSN` are individual candidate keys because any of them can uniquely identify an employee.
+
+### C. Super-Key (The Broadest Category)
+* **Definition:** **Any** combination of columns that uniquely identifies a row, even if it contains extra, redundant information.
+* *In our example:* 
+  * `EmployeeID` is a candidate key.
+  * `(EmployeeID, Email)` is a **super-key** because together they uniquely identify the row, but `Email` is redundant baggage. 
+  * *Rule:* Every primary key is a super-key, but not vice versa.
+
+### D. Primary Key (PK)
+* **Definition:** The single, official candidate key chosen by the database designer to uniquely identify rows in that table.
+* *In our example:* We select `EmployeeID` to be our official Primary Key.
+
+### E. Foreign Key (FK)
+* **Definition:** A column in one table that points directly to the Primary Key of another table. It acts as the relational "glue."
+* *Example:* An `Orders` table has a column `CustomerID` that points to `Customers(CustomerID)`.
+
+---
+
+## 3. Normalization: The Order Management System Example
 
 Let’s trace a single online store order through each normalization layer using data tables to see how redundancy is eliminated.
 
