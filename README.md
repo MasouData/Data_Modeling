@@ -1,42 +1,46 @@
-# 📐 Data Modeling & Data Architecture Masterclass
+# Data Modeling for Analytics
 
-Welcome to the **Data Modeling** repository! This repository provides a structured, practical, and intuitive documentation series designed to help data engineers, analysts, and architects master dimensional modeling, data warehousing fundamentals, and robust ETL/pipeline patterns.
+A learning guide to relational and dimensional modeling, from defining what one row represents to building a star schema and preserving historical context.
 
-Each module emphasizes real-world edge cases, concrete SQL examples, and clear conceptual intuition over dry academic theory.
+The examples use retail orders, customers, products, and returns. Basic SQL knowledge is helpful. You can read the lessons directly on GitHub.
 
----
+## Learning path
 
-## 📂 Repository Structure & Curriculum
+| Step | Lesson | Question you’ll learn to answer |
+| --- | --- | --- |
+| 1 | [Grain, Keys, and Normalization](./introduction_to_grain_and_primary_keys.md) | What does one row represent, how do I identify it, and when should I split data into separate tables? |
+| 2 | [Facts, Dimensions, and the Star Schema](./fact_and_dimension_tables.md) | How do I organize sales events and their descriptive context so I can report on them together? |
+| 3 | [Slowly Changing Dimensions and CDC](./slowly_changing_dimensions_and_cdc.md) | When a customer moves, how can I report sales by the city they lived in at the time of purchase? |
+| 4 | [Returns and Late-Arriving Facts](./advanced_fact_table_patterns.md) | How do I record a return or load a delayed sale while keeping the original sale date accurate? |
+| 5 | [Star vs. Snowflake Schemas](./snowflake_schema.md) | When should product categories stay in `Dim_Product`, and when might separate hierarchy tables make sense? |
 
-The documentation is organized into a progressive learning path. Start from Module 1 and work your way through to master modern data architecture:
+## One example to connect the lessons
 
-### [1. Introduction to Grain and Primary Keys](./introduction_to_grain_and_primary_keys.md)
-* **What you'll learn:** The foundational concept of **Grain** (what an individual row represents), why grain dictates everything in data modeling, composite keys, and how to define primary keys correctly in SQL.
+**Business question:** How much did we sell by product category and customer city?
 
-### [2. Fact and Dimension Tables](./fact_and_dimension_tables.md)
-* **What you'll learn:** The building blocks of the **Star Schema**. Understand how descriptive **Dimension tables** (`Dim_Customer`, `Dim_Product`) provide context using Surrogate Keys (`_sk`), while quantitative **Fact tables** (`Fact_Sales`) capture immutable business measurements.
+Start by defining the grain: **one row per completed sale line**. If an order contains a laptop and a mouse on separate lines, that gives us two fact rows. Each row records the quantity and sale amount for that line. The dimensions tell us which product was sold, who bought it, and when.
 
-### [3. Slowly Changing Dimensions & CDC](./slowly_changing_dimensions_and_cdc.md)
-* **What you'll learn:** How to handle attribute changes over time without breaking historical reports. Explores **SCD Type 1 (Overwrite)** vs. **SCD Type 2 (History Preservation)** and how automated **Change Data Capture (CDC)** transaction log streams feed these updates.
+```mermaid
+erDiagram
+    Dim_Customer ||--o{ Fact_Sales : "describes the buyer"
+    Dim_Product ||--o{ Fact_Sales : "describes the product"
+    Dim_Date ||--o{ Fact_Sales : "identifies the sale date"
+```
 
-### [4. Advanced Fact Table Patterns](./advanced_fact_table_patterns.md)
-* **What you'll learn:** Real-world pipeline resilience. Covers how to handle product returns and cancellations using **Compensating Rows (Reversals with negative numbers)** and how to accurately process **Late-Arriving Facts** without distorting historical dates.
+Each sale line refers to one row in each dimension. A dimension row can describe many sale lines.
 
-### [5. The Snowflake Schema](./snowflake_schema.md)
-* **What you'll learn:** Exploring normalized dimension hierarchies. Compares the **Snowflake Schema** with the standard **Star Schema**, weighing storage efficiency and normalization against query complexity and join performance.
+| What happens next? | Modeling decision |
+| --- | --- |
+| The customer moves from New York to Seattle. | Use **SCD Type 2** if reports need the city at the time of each sale. Preserve the New York version and create a Seattle version for later sales. |
+| The customer returns the mouse. | If the model records sales and returns as events, keep the original sale and record the return separately. Define the grain accordingly, for example, **one row per sale or return line**. |
+| The sale reaches the warehouse two days late. | Keep the original sale date for reporting and record the load timestamp separately. |
+| Products belong to subcategories and categories. | Compare keeping the hierarchy in `Dim_Product` with splitting it into separate tables. Consider query simplicity and how the hierarchy is maintained. |
 
----
+## Before designing a table
 
-## 💡 Core Architectural Principles
+1. Write **“One row represents …”** in plain language.
+2. Identify which column or combination of columns makes that row unique.
+3. Check that every measure belongs at that grain. For example, repeating an order total on each order line can inflate revenue when you sum it.
+4. Decide which attributes need historical versions based on the questions your reports must answer.
 
-Throughout this documentation, we adhere to several golden rules of data warehousing:
-1. **Grain First:** Always define the exact resolution of your data before writing a single line of SQL or creating tables.
-2. **Surrogate Keys for Dimensions:** Decouple internal warehouse joins from volatile natural business keys.
-3. **Immutable Fact Tables:** Fact tables are append-only event logs. Never run mutating `UPDATE` statements on historical transactional data.
-4. **Star Schema Preference:** Prioritize wide, denormalized star schemas for lightning-fast BI queries and optimal columnar storage performance.
-
----
-
-## 🚀 Getting Started
-
-Clone the repository and explore the individual markdown files in order to build a rock-solid mental and practical foundation in modern data architecture!
+Start with [Grain, Keys, and Normalization](./introduction_to_grain_and_primary_keys.md).
