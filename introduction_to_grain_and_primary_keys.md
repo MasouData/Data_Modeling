@@ -1,126 +1,109 @@
-# Introduction to Grain, Primary Keys, and Database Normalization
+# Grain, Keys, and Normalization
 
-Data modeling starts long before normalization. It starts with understanding **grain** (the level of detail in your data), mastering **keys**, and knowing the difference between operational systems and analytical data structures.
+**Learning goal:** Given a retail order, explain what one row represents, choose a key that identifies it, and decide which table should store each attribute.
 
----
+## 1. Grain: What does one row represent?
 
-## 1. What is Grain? (The Level of Detail)
+Alice places order 101. She buys a laptop, two mice at the regular price, and another mouse on a promotional line.
 
-The **grain** defines precisely what a single row in a table represents. Getting the grain wrong is the #1 cause of broken data models and bloated queries. Always ask yourself: *"If I look at one single row in this table, what am I looking at?"*
+| OrderID | LineNo | ProductID | Product | Quantity | Unit price paid | Line amount |
+| --- | ---: | --- | --- | ---: | ---: | ---: |
+| 101 | 1 | P1 | Laptop | 1 | €1,200 | €1,200 |
+| 101 | 2 | P2 | Mouse | 2 | €25 | €50 |
+| 101 | 3 | P2 | Mouse | 1 | €20 | €20 |
 
-### Grain Levels Visualized
+**Grain:** One row represents one line on an order.
 
-| Grain Level | Description (What One Row Represents) | Real-World Example | Best Use Case |
-| :--- | :--- | :--- | :--- |
-| **Coarse Grain** <br>*(High-Level Summary)* | Aggregated summary per entity or time window | Total sales for Store A today: `$12,450` | Executive dashboards, high-level reporting |
-| **Medium Grain** <br>*(Operational Level)* | One record per transactional header/event | Order `#101` placed by Alice Smith on Nov 18 | Order tracking, customer support lookup |
-| **Fine Grain** <br>*(Granular Detail)* | One record per individual component or line item | Item 1 (Laptop, Qty 1) inside Order `#101` | Line-item analysis, inventory auditing, pricing flexibility |
+| Grain | What one row tells you |
+| --- | --- |
+| One row per order | Order 101 totals €1,270. |
+| One row per order line | Line 3 contains one mouse priced at €20. |
 
-> **Rule of Thumb:** Always design your operational tables at the **finest practical grain** (line-item level). You can always aggregate fine data up into summaries, but you can never accurately split a summary back down into fine data.
+Both grains are useful. If you copy the €1,270 order total onto each of the three lines and sum it, you get **€3,810**. Sum the line amounts to calculate the order total, or read the total from a table with one row per order. In this example, the total is the sum of quantity × unit price paid, with no separate taxes or fees.
 
----
+## 2. Keys: How do we identify each row?
 
-## 2. The Key Spectrum (With Visual Examples)
+`OrderID` repeats across Alice’s three lines, and `LineNo` can repeat across orders. Together, `(OrderID, LineNo)` identifies one line because line numbers are unique within each order. The pair `(OrderID, ProductID)` fails because `(101, P2)` occurs twice.
 
-To build relational models, you must understand the hierarchy of keys. Let's use a sample `Employees` table with columns: `EmployeeID`, `Email`, `SSN`, `FirstName`, `LastName`.
+| Key | Meaning | Retail example |
+| --- | --- | --- |
+| Candidate key | A minimal set of columns that uniquely identifies a row | `(OrderID, LineNo)` |
+| Superkey | Any set of columns that uniquely identifies a row, including sets with redundant columns | `(OrderID, LineNo, ProductID)` |
+| Primary key | The candidate key chosen as the main identifier | `PRIMARY KEY (OrderID, LineNo)` |
+| Composite key | A key made up of multiple columns | `(OrderID, LineNo)` |
+| Foreign key | A reference to a primary key or another eligible unique key | `OrderLines.OrderID` references `Orders.OrderID` |
+| Business key | An identifier used by the business or source system | `ProductID` in the store’s catalog |
+| Surrogate key | An identifier created for the model without business meaning | A generated `OrderLineID` |
 
-### Key Types Breakdown
+If the design uses a generated `OrderLineID` as the primary key, the grain stays **one row per order line**. Declare `OrderID` and `LineNo` as `NOT NULL` and enforce `UNIQUE (OrderID, LineNo)` to preserve the rule that each line number appears once per order.
 
-| Key Type | Definition & Rule | Example from `Employees` Table | Why It Matters / Key Takeaway |
-| :--- | :--- | :--- | :--- |
-| **Surrogate Key** | Artificial, system-generated ID with zero business meaning | `EmployeeID` (`101`, `102`, `103`) | **Safe & Permanent.** Never changes, making it the ideal anchor for foreign keys. |
-| **Natural Key** | A real-world, business-owned unique identifier | `SSN` (`000-00-0000`) or `Email` (`alice@work.com`) | **Human-Readable.** Intuitive, but risky because real-world data (like emails) can change. |
-| **Candidate Key** | Any column (or minimal combination) that *could* uniquely identify a row | `EmployeeID`, `Email`, and `SSN` are *all* candidate keys | The pool of eligible choices from which the designer picks a Primary Key. |
-| **Super-Key** | **Any** combination of columns that uniquely identifies a row (allows redundant columns) | `(EmployeeID, Email)` <br>*(EmployeeID is enough; Email is redundant baggage)* | The broadest category. **Every primary key is a super-key, but not vice versa.** |
-| **Primary Key (PK)** | The single, official candidate key chosen to uniquely identify rows | `EmployeeID` selected as the official row identifier | **Entity Integrity.** Enforces uniqueness; no row can exist without it. |
-| **Foreign Key (FK)** | A column in one table pointing to the Primary Key of *another* table | `Orders.CustomerID` pointing to `Customers.CustomerID` | **Relational Glue.** Connects normalized tables together across the database. |
+## 3. Normalization: Which table stores each attribute?
 
----
+Imagine a spreadsheet with the order date, customer details, and product name copied onto every line. If the product name changes in one row and stays the same in another, the sheet contains two names for the same product. Normalization uses business rules to find where such attributes belong.
 
-## 3. The Big Picture: OLTP vs. OLAP & Dimensional Concepts
+A **functional dependency** `A → B` means that rows with the same value of `A` must have the same value of `B` under the business rules.
 
-Before building tables, you must know **where** your data model lives and what its job is. 
+| Dependency | Business rule |
+| --- | --- |
+| `OrderID → OrderDate, CustomerID` | Each order has one date and one customer. |
+| `CustomerID → CustomerName, CurrentCity` | Each customer has one name and current city in this model. |
+| `ProductID → ProductName` | Each product has one name in the current catalog. |
+| `(OrderID, LineNo) → ProductID, Quantity, UnitPricePaid` | Each order line has one product, quantity, and agreed unit price. |
 
-### A. OLTP vs. OLAP: How to Identify Them
+| Normal form | What changes in this example? |
+| --- | --- |
+| **1NF** | Expand the product list into individual rows. Give each line its own product ID, quantity, and unit price columns. |
+| **2NF** | Move order details to `Orders`. They depend on `OrderID` alone, a proper subset of the line’s composite candidate key. In general, 2NF checks for partial dependencies of non-key attributes on any candidate key. |
+| **3NF** | Move the customer’s name and current city from `Orders` to `Customers`, and the product name from `OrderLines` to `Products`. The intermediate tables determine these attributes indirectly through `CustomerID` and `ProductID`. |
 
-| Feature | OLTP (Online Transaction Processing) | OLAP (Online Analytical Processing) |
-| :--- | :--- | :--- |
-| **Primary Purpose** | Running day-to-day operations (e.g., checkout, login, cart updates) | Business intelligence, trend analysis, reporting |
-| **Query Type** | Fast, small, frequent `INSERT`, `UPDATE`, `DELETE` operations | Heavy, complex read queries scanning millions of rows |
-| **Database Design** | **Highly Normalized (1NF to 3NF)** to avoid update errors | **Denormalized (Star / Snowflake Schema)** for speed |
+**Keep `UnitPricePaid` on `OrderLines`.** Alice paid €25 per mouse on one line and €20 on another. The price she paid depends on the order line. A current catalog price, if stored, belongs to the product in this simplified model.
 
-* **Why Normalization matters here:** You **must** normalize OLTP databases to 3NF so that when a customer changes their address, you only update it in *one* place, preventing data corruption.
+### The resulting relational model
 
-### B. Core Data Warehousing Terms (Fact, Dimension, Data Mart)
-When data moves from OLTP systems into an analytical environment (OLAP), it is remodeled into a dimensional architecture:
+```mermaid
+erDiagram
+    CUSTOMERS ||--o{ ORDERS : places
+    ORDERS ||--|{ ORDER_LINES : contains
+    PRODUCTS ||--o{ ORDER_LINES : appears_on
+```
 
-| Concept | What It Is | Real-World Example |
-| :--- | :--- | :--- |
-| **Fact Table** | Contains measurable, quantitative data (numerical metrics and events) | `SalesAmount`, `QuantitySold`, `Discount` |
-| **Dimension Table** | Contains descriptive context *about* the facts (the "who, what, where, when") | `CustomerName`, `ProductCategory`, `StoreLocation`, `Date` |
-| **Data Mart** | A focused, department-specific subset of a data warehouse | A **Sales Data Mart** containing only retail sales facts and dimensions |
+| Table | One row represents | Primary key | Foreign keys |
+| --- | --- | --- | --- |
+| `Customers` | One customer | `CustomerID` | — |
+| `Orders` | One placed order | `OrderID` | `CustomerID` |
+| `Products` | One catalog product | `ProductID` | — |
+| `OrderLines` | One line on an order | `(OrderID, LineNo)` | `OrderID`, `ProductID` |
 
----
+The diagram assumes a placed order has at least one line. A system that supports empty drafts would allow zero lines for a draft order.
 
-## 4. Normalization: The Order Management System Example
+## 4. From operational records to analytics
 
-Now let's trace an online store order through each normalization layer using visual tables to see how redundancy is eliminated in an OLTP system.
+| Workload | Example question | Design concern |
+| --- | --- | --- |
+| **OLTP** (transaction processing) | What did Alice order, and what price did she pay? | Record orders consistently and enforce business rules. |
+| **OLAP** (analytical processing) | How much did we sell by product category and customer city? | Define the grain and make it easy to group sales by the right attributes. |
 
-### Stage 0: The Unnormalized Spreadsheet (Before 1NF)
-*The messy, NoSQL/JSON-like starting point where multiple items and details are jammed into single cells.*
+The next lesson uses the retail example to show how facts capture business events and dimensions provide context.
 
-| OrderID | CustomerName | CustomerCity | Products & Quantities (Jammed) |
-| :--- | :--- | :--- | :--- |
-| **101** | Alice Smith | New York | Laptop (Qty: 1, $1200), Mouse (Qty: 2, $25) |
-| **102** | Bob Jones | Chicago | Laptop (Qty: 1, $1200) |
+## Check your understanding
 
----
+1. Why does `(OrderID, ProductID)` fail as a key in this example?
+2. If `OrderLineID` becomes the primary key, what happens to the grain?
+3. If the mouse’s catalog price rises tomorrow, which price should you use to reconstruct Alice’s original order total?
 
-### Stage 1: First Normal Form (1NF)
-**Rule:** Atomic values in every cell (no lists, arrays, or comma-separated bundles).
+<details>
+<summary>Answers</summary>
 
-| OrderID | CustomerName | CustomerCity | ProductID | ProductName | Price | Quantity |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 101 | Alice Smith | New York | P1 | Laptop | $1200 | 1 |
-| 101 | Alice Smith | New York | P2 | Mouse | $25 | 2 |
-| 102 | Bob Jones | Chicago | P1 | Laptop | $1200 | 1 |
+1. The same product appears twice in order 101, so the pair is duplicated.
+2. The grain stays one row per order line.
+3. Use the agreed unit price stored on each original order line.
 
-* **Primary Key:** Composite key `(OrderID, ProductID)`
+</details>
 
----
+## References
 
-### Stage 2: Second Normal Form (2NF)
-**Rule:** Must be in 1NF + **No partial dependencies** (non-key attributes must depend on the *entire* primary key). This naturally exposes the **Many-to-Many ($N:N$) junction table**.
+- [Kimball Group · Declaring the Grain](https://www.kimballgroup.com/2003/03/declaring-the-grain/)
+- [PostgreSQL · Constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
+- [Aalto University · Normalization](https://opencs.aalto.fi/en/courses/databases/part-8/4-normalization)
 
-* **`Orders` Table:** `OrderID` (PK), `CustomerName`, `CustomerCity`
-* **`Products` Table:** `ProductID` (PK), `ProductName`, `Price`
-* **`OrderItems` Table (Junction):** `OrderID` (FK), `ProductID` (FK), `Quantity` — *(Primary Key: Composite `(OrderID, ProductID)`)*
-
----
-
-### Stage 3: Third Normal Form (3NF)
-**Rule:** Must be in 2NF + **No transitive dependencies** (non-key attributes cannot depend on other non-key attributes).
-
-* **`Customers` Table:** `CustomerID` (PK), `CustomerName`, `CustomerCity`
-* **`Orders` Table:** `OrderID` (PK), `CustomerID` (FK)
-* **`Products` Table:** `ProductID` (PK), `ProductName`, `Price`
-* **`OrderItems` Table:** `OrderID` (FK), `ProductID` (FK), `Quantity`
-
----
-
-## 5. Advanced Normal Forms: BCNF and 4NF
-
-* **Boyce-Codd Normal Form (BCNF):** Every "Boss" (determinant $A \rightarrow B$) must be a candidate key. Catches rare overlapping key anomalies.
-* **Fourth Normal Form (4NF):** No multi-valued dependencies (prevents independent lists like colors and storage from exploding into a cartesian product of redundant rows).
-
----
-
-## Summary Checklist
-
-| Normal Form / Concept | Key Requirement / Meaning | What it Solves / Purpose |
-| :--- | :--- | :--- |
-| **Grain** | The exact level of detail represented by a single row | Prevents metric mismatch and grouping errors |
-| **OLTP vs. OLAP** | Transactional systems vs. Analytical data stores | Determines whether to normalize (OLTP) or denormalize (OLAP) |
-| **Fact & Dimension** | Measurements vs. Descriptive context | Core building blocks of analytical data models |
-| **1NF to 3NF** | Atomic values, no partial keys, no transitive dependencies | Eliminates redundancy and update anomalies in operational databases |
-| **BCNF & 4NF** | Strict determinant and multi-valued rules | Rare edge-case data anomalies |
+[Back to the learning path](./README.md) · [Next: Fact and Dimension Tables](./fact_and_dimension_tables.md)
