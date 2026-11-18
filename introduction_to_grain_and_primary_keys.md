@@ -1,6 +1,6 @@
 # Introduction to Grain, Primary Keys, and Database Normalization
 
-Data modeling starts long before normalization. It starts with understanding **grain** (the level of detail in your data) and mastering **keys** (how rows and tables relate to one another). 
+Data modeling starts long before normalization. It starts with understanding **grain** (the level of detail in your data), mastering **keys**, and knowing the difference between operational systems and analytical data structures.
 
 ---
 
@@ -37,9 +37,34 @@ To build relational models, you must understand the hierarchy of keys. Let's use
 
 ---
 
-## 3. Normalization: The Order Management System Example
+## 3. The Big Picture: OLTP vs. OLAP & Dimensional Concepts
 
-Let’s trace a single online store order through each normalization layer using data tables to see how redundancy is eliminated.
+Before building tables, you must know **where** your data model lives and what its job is. 
+
+### A. OLTP vs. OLAP: How to Identify Them
+
+| Feature | OLTP (Online Transaction Processing) | OLAP (Online Analytical Processing) |
+| :--- | :--- | :--- |
+| **Primary Purpose** | Running day-to-day operations (e.g., checkout, login, cart updates) | Business intelligence, trend analysis, reporting |
+| **Query Type** | Fast, small, frequent `INSERT`, `UPDATE`, `DELETE` operations | Heavy, complex read queries scanning millions of rows |
+| **Database Design** | **Highly Normalized (1NF to 3NF)** to avoid update errors | **Denormalized (Star / Snowflake Schema)** for speed |
+
+* **Why Normalization matters here:** You **must** normalize OLTP databases to 3NF so that when a customer changes their address, you only update it in *one* place, preventing data corruption.
+
+### B. Core Data Warehousing Terms (Fact, Dimension, Data Mart)
+When data moves from OLTP systems into an analytical environment (OLAP), it is remodeled into a dimensional architecture:
+
+| Concept | What It Is | Real-World Example |
+| :--- | :--- | :--- |
+| **Fact Table** | Contains measurable, quantitative data (numerical metrics and events) | `SalesAmount`, `QuantitySold`, `Discount` |
+| **Dimension Table** | Contains descriptive context *about* the facts (the "who, what, where, when") | `CustomerName`, `ProductCategory`, `StoreLocation`, `Date` |
+| **Data Mart** | A focused, department-specific subset of a data warehouse | A **Sales Data Mart** containing only retail sales facts and dimensions |
+
+---
+
+## 4. Normalization: The Order Management System Example
+
+Now let's trace an online store order through each normalization layer using visual tables to see how redundancy is eliminated in an OLTP system.
 
 ### Stage 0: The Unnormalized Spreadsheet (Before 1NF)
 *The messy, NoSQL/JSON-like starting point where multiple items and details are jammed into single cells.*
@@ -53,7 +78,6 @@ Let’s trace a single online store order through each normalization layer using
 
 ### Stage 1: First Normal Form (1NF)
 **Rule:** Atomic values in every cell (no lists, arrays, or comma-separated bundles).
-* *Action:* Break multi-valued items into individual rows.
 
 | OrderID | CustomerName | CustomerCity | ProductID | ProductName | Price | Quantity |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -66,68 +90,37 @@ Let’s trace a single online store order through each normalization layer using
 ---
 
 ### Stage 2: Second Normal Form (2NF)
-**Rule:** Must be in 1NF + **No partial dependencies** (non-key attributes must depend on the *entire* primary key).
-* *Action:* Split tables to remove partial key dependencies. This naturally exposes the **Many-to-Many ($N:N$) relationship** via a junction table.
+**Rule:** Must be in 1NF + **No partial dependencies** (non-key attributes must depend on the *entire* primary key). This naturally exposes the **Many-to-Many ($N:N$) junction table**.
 
-#### 1. `Orders` Table (Depends only on OrderID)
-| OrderID | CustomerName | CustomerCity |
-| :--- | :--- | :--- |
-| 101 | Alice Smith | New York |
-| 102 | Bob Jones | Chicago |
-
-#### 2. `Products` Table (Depends only on ProductID)
-| ProductID | ProductName | Price |
-| :--- | :--- | :--- |
-| P1 | Laptop | $1200 |
-| P2 | Mouse | $25 |
-
-#### 3. `OrderItems` Table (Junction Table - Depends on both keys)
-| OrderID | ProductID | Quantity |
-| :--- | :--- | :--- |
-| 101 | P1 | 1 |
-| 101 | P2 | 2 |
-| 102 | P1 | 1 |
+* **`Orders` Table:** `OrderID` (PK), `CustomerName`, `CustomerCity`
+* **`Products` Table:** `ProductID` (PK), `ProductName`, `Price`
+* **`OrderItems` Table (Junction):** `OrderID` (FK), `ProductID` (FK), `Quantity` — *(Primary Key: Composite `(OrderID, ProductID)`)*
 
 ---
 
 ### Stage 3: Third Normal Form (3NF)
 **Rule:** Must be in 2NF + **No transitive dependencies** (non-key attributes cannot depend on other non-key attributes).
-* *Action:* In the 2NF `Orders` table, `CustomerCity` depended on `CustomerName` (a non-key attribute). We split customers into their own table.
 
-#### 1. `Customers` Table (New Table)
-| CustomerID | CustomerName | CustomerCity |
-| :--- | :--- | :--- |
-| C1 | Alice Smith | New York |
-| C2 | Bob Jones | Chicago |
-
-#### 2. `Orders` Table (Cleaned up with Foreign Key)
-| OrderID | CustomerID (FK) |
-| :--- | :--- |
-| 101 | C1 |
-| 102 | C2 |
-
-#### 3. `Products` & `OrderItems` *(Unchanged from 2NF)*
+* **`Customers` Table:** `CustomerID` (PK), `CustomerName`, `CustomerCity`
+* **`Orders` Table:** `OrderID` (PK), `CustomerID` (FK)
+* **`Products` Table:** `ProductID` (PK), `ProductName`, `Price`
+* **`OrderItems` Table:** `OrderID` (FK), `ProductID` (FK), `Quantity`
 
 ---
 
-## 3. Advanced Normal Forms: BCNF and 4NF
+## 5. Advanced Normal Forms: BCNF and 4NF
 
-### Boyce-Codd Normal Form (BCNF)
-* **Rule:** Every "Boss" (determinant $A \rightarrow B$) **must be a candidate key**. No ordinary, non-unique columns are allowed to act as determinants.
-* **Why it matters:** Catches rare overlapping key anomalies that slip past 3NF.
-
-### Fourth Normal Form (4NF)
-* **Rule:** Must be in BCNF + **No Multi-Valued Dependencies**. A table cannot hold two or more independent multi-valued facts about the same entity (e.g., independent Product Colors and Product Storage).
-* **Why it matters:** Prevents massive cartesian product explosions of redundant rows.
+* **Boyce-Codd Normal Form (BCNF):** Every "Boss" (determinant $A \rightarrow B$) must be a candidate key. Catches rare overlapping key anomalies.
+* **Fourth Normal Form (4NF):** No multi-valued dependencies (prevents independent lists like colors and storage from exploding into a cartesian product of redundant rows).
 
 ---
 
 ## Summary Checklist
 
-| Normal Form | Key Requirement | What it Eliminates |
+| Normal Form / Concept | Key Requirement / Meaning | What it Solves / Purpose |
 | :--- | :--- | :--- |
-| **1NF** | Atomic values in every cell | Multi-valued cells & repeating groups |
-| **2NF** | 1NF + No partial dependencies | Partial key dependencies (composite key splits) |
-| **3NF** | 2NF + No transitive dependencies | Non-key dependent on non-key attributes |
-| **BCNF** | Every determinant must be a super-key | Subtle overlapping candidate key anomalies |
-| **4NF** | No multi-valued dependencies | Cartesian product explosions from independent lists |
+| **Grain** | The exact level of detail represented by a single row | Prevents metric mismatch and grouping errors |
+| **OLTP vs. OLAP** | Transactional systems vs. Analytical data stores | Determines whether to normalize (OLTP) or denormalize (OLAP) |
+| **Fact & Dimension** | Measurements vs. Descriptive context | Core building blocks of analytical data models |
+| **1NF to 3NF** | Atomic values, no partial keys, no transitive dependencies | Eliminates redundancy and update anomalies in operational databases |
+| **BCNF & 4NF** | Strict determinant and multi-valued rules | Rare edge-case data anomalies |
